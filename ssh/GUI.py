@@ -1,13 +1,13 @@
-import tkinter as tk, os, sys, threading, time, psutil, configparser, subprocess, threading
+import tkinter as tk, os, threading, time, psutil, configparser, subprocess, threading
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 
 ssh_process = None
 ssh_active = False
-ssh_command = []
 port_bindings_entries = []
 use_line_checkboxes = []
-Pfad = os.path.dirname(sys.argv[0])
+ssh_command = []
+Pfad = os.path.dirname(os.path.abspath(__file__))
 
 def add_port_row():
     row_index = len(port_bindings_entries)
@@ -39,11 +39,13 @@ def check_ssh_process_status():
         if ssh_processes:
             ssh_active = True
             ssh_process = ssh_processes[0]
-            execute_button.config(text="...Executing...")
+            execute_button.config(text="...läuft...")
+            disable_widgets_except_one(execute_button)
         else:
             ssh_active =False
             ssh_process = None
-            execute_button.config(text="Execute SSH")
+            execute_button.config(text="SSH verbinden")
+            enable_all_widgets()
         time.sleep(5)
 
 def save_settings():
@@ -121,21 +123,12 @@ def select_keyfile():
         schluesseldatei_entry.insert(0, file_path)
 
 def execute_ssh():
+    global ssh_command
     ssh_thread = threading.Thread(target=ssh_thread_func)
     ssh_thread.start()
 
-    ssh_output = subprocess.PIPE
-    ssh_process = subprocess.Popen(ssh_command, stdout=ssh_output, stderr=ssh_output, text=True)
-
-    stdout, stderr = ssh_process.communicate()
-
-    if "UNPROTECTED PRIVATE KEY FILE" in stderr:
-        messagebox.showwarning("Warning", "Unprotected private key file!")
-    elif ssh_process.returncode != 0:
-        messagebox.showerror("Error", "SSH command failed!")
-
 def ssh_thread_func():
-    global ssh_process
+    global ssh_process, ssh_command
 
     schluesseldatei_pfad = schluesseldatei_entry.get()
     ssh_port = ssh_port_entry.get()
@@ -168,24 +161,21 @@ def ssh_thread_func():
         ])
 
     ssh_command.append(f'{ssh_user}@{host}')
-    ssh_process = subprocess.Popen(ssh_command)
-    print(ssh_command)
+    ssh_output = subprocess.PIPE
+    ssh_process = subprocess.Popen(ssh_command, stdout=ssh_output, stderr=ssh_output, text=True)
 
 def toggle_ssh_button():
     global ssh_active, ssh_process
 
     if ssh_active:
-        execute_button.config(text="End...")
-
+        execute_button.config(text="Beende...")
         if ssh_process:
             stop_ssh_tunnel()
             ssh_active = False
-        execute_button.config(text="Execute SSH")
     else:
         ssh_active = True
-        execute_button.config(text="Executing...")
+        execute_button.config(text="verbinde...")
         execute_ssh()
-        execute_button.config(text="Execution!")
 
 def stop_ssh_tunnel():
     global ssh_process
@@ -193,6 +183,26 @@ def stop_ssh_tunnel():
         ssh_process.terminate()
         ssh_process.wait()
         ssh_process = None
+
+def disable_widgets_except_one(widget_to_exclude):
+    global inner_frame, lower_frame
+    for childs in inner_frame.winfo_children():
+        if childs != widget_to_exclude:
+            if not isinstance(childs, ttk.Label) and not isinstance(childs, ttk.Frame):
+                childs.config(state=tk.DISABLED)
+    for childs in lower_frame.winfo_children():
+        if childs != widget_to_exclude:
+            if not isinstance(childs, ttk.Label) and not isinstance(childs, ttk.Frame):
+                childs.config(state=tk.DISABLED)
+
+def enable_all_widgets():
+    global inner_frame, lower_frame
+    for childs in inner_frame.winfo_children():
+        if not isinstance(childs, ttk.Label) and not isinstance(childs, ttk.Frame):
+            childs.config(state=tk.NORMAL)
+    for childs in lower_frame.winfo_children():
+        if not isinstance(childs, ttk.Label) and not isinstance(childs, ttk.Frame):
+            childs.config(state=tk.NORMAL)
 
 app = tk.Tk()
 app.title("SSH-Tunnel-GUI")
@@ -251,7 +261,7 @@ bind_use_label = ttk.Label(lower_frame, text="Ziel Port")
 bind_use_label.grid(row=0, column=3)
 
 add_port_row_button = ttk.Button(lower_frame, text="+", command=add_port_row)
-execute_button = ttk.Button(lower_frame, text="Execute SSH", command=toggle_ssh_button)
+execute_button = ttk.Button(lower_frame, text="SSH verbinden", command=toggle_ssh_button)
 save_button = ttk.Button(lower_frame, text="Save Settings", command=save_settings)
 load_button = ttk.Button(lower_frame, text="Load Settings", command=load_settings)
 
